@@ -53,11 +53,17 @@ and the app finds the FM-1 under its 1.0 name, TRAPSTATION FM-1.
 - The new controls of 1.0 (Piano Roll OCT+ + K1, the sequencer's PLAY bar and COPY TO, PERFORMANCE): they are played on
   the device; the app does not show or edit them
 - SLICE settings of a sample: kept with the last jam on the device, not shown in the app
-- A ready-made download: build the installer yourself (below) until a release is published
 - macOS and Linux
 
-Not every function has been tried on a FM-1 with firmware 1.0.0.0 yet. If something does not work, open an
-[issue](https://github.com/sog-maker/trapstation-desktop/issues) with what you did and what the app said.
+Every function of this build has been tested on a FM-1 with TRAPSTATION OS 1.0.0.0. If something does not work for
+you, open an [issue](https://github.com/sog-maker/trapstation-desktop/issues) with what you did and what the app said.
+
+## Download
+
+From the [latest release](https://github.com/sog-maker/trapstation-desktop/releases/latest):
+
+- `Trap Station Setup 0.1.1.exe`: the installer (Windows may warn that it is not signed: More info > Run anyway)
+- `Trap Station-0.1.1-win.zip`: the program without installing, for `scripts/install.ps1` (below)
 
 ## Requirements
 
