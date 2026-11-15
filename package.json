@@ -2,10 +2,10 @@
     "private":  true,
     "description":  "Trap Station desktop: sample converter, arrangement and Ableton export for the Trapstation firmware",
     "license":  "GPL-3.0-only",
-    "version":  "0.1.0",
+    "version":  "0.1.1",
     "scripts":  {
                     "start":  "electron .",
-                    "dist":  "electron-builder --win nsis"
+                    "dist":  "electron-builder --win"
                 },
     "name":  "trapstation-desktop",
     "main":  "main.js",
@@ -32,7 +32,8 @@
                                      ],
                   "win":  {
                               "target":  [
-                                             "nsis"
+                                             "nsis",
+                                             "zip"
                                          ],
                               "icon":  "renderer/assets/trapstation.ico",
                               "signAndEditExecutable":  false
