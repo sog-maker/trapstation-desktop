@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trapstation</title>
+<style>
+  /* Trapstation palette (docs/UI_THEME.md): Schwarz/Stahl als Grund, Rot als Markenfarbe, Gold nur für aktive Dinge */
+  :root {
+    --bg:#000; --surf:#16181A; --raise:#2A2E31; --line:#4A4F54; --steel:#8A9096; --text:#E4E6E8;
+    --red:#FF2A2A; --red-deep:#C40208; --blue:#1E9BFF; --green:#44C893; --gold:#FDCF3D;
+  }
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--text); font:13px/1.3 "Segoe UI", system-ui, sans-serif; display:grid; grid-template-rows: auto 1fr; overflow:hidden; }
+  header { background:var(--surf); border-bottom:2px solid var(--red); padding:6px 14px; display:flex; align-items:center; gap:12px; }
+  header .brand { height:28px; width:auto; }
+  /* start: the Trap Station logo, fades out after the start-up */
+  #splash { position:fixed; inset:0; background:#000; display:flex; align-items:center; justify-content:center; z-index:20; transition:opacity .6s; }
+  #splash.gone { opacity:0; pointer-events:none; }
+  #splash img { width:360px; height:360px; image-rendering:auto; }
+  header b { letter-spacing:.14em; font-size:14px; }
+  header span { color:var(--steel); font-size:11px; letter-spacing:.08em; }
+
+  /* three columns: converter + sampler | device (centre) | banks + editor */
+  .main { display:grid; grid-template-columns: 380px minmax(520px,1fr) 440px; min-height:0; }
+  .filelist { max-height:320px; overflow:auto; border:1px solid var(--raise); border-radius:3px; background:var(--bg); }
+  .col { background:var(--surf); border:1px solid var(--raise); padding:12px; overflow:auto; min-height:0; min-width:0; }
+  .col.center { display:flex; flex-direction:column; align-items:center; gap:10px; background:var(--bg); }
+  .sec { border-bottom:1px solid var(--raise); padding-bottom:12px; margin-bottom:12px; }
+  h2 { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--steel); margin:0 0 10px; font-weight:600; }
+  button { background:var(--raise); color:var(--text); border:1px solid var(--line); padding:6px 12px; border-radius:3px; cursor:pointer; font:inherit; }
+  button:hover:not(:disabled) { border-color:var(--red); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--red-deep); border-color:var(--red); }
+  .btnrow { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:6px 0; }
+  #drop { border:2px dashed var(--line); border-radius:4px; padding:18px; text-align:center; color:var(--steel); cursor:pointer; }
+  #drop.over { border-color:var(--red); color:var(--text); }
+  #conv, #status, #mstat, #memtxt-host { color:var(--steel); min-height:18px; margin:6px 0; font-size:12px; }
+  .hint { color:var(--steel); font-size:11px; }
+
+  /* device screen: the framebuffer is 240 x 240, scaled smoothly, in a bezel like the design cards */
+  .bezel { position:relative; padding:14px; border-radius:18px; background:linear-gradient(160deg,#2A2E31 0%,#16181A 45%,#0B0C0D 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 10px 30px rgba(0,0,0,.6), 0 0 0 1px #000; }
+  .bezel::after { content:""; position:absolute; inset:14px; border-radius:8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), inset 0 0 28px rgba(0,0,0,.55); pointer-events:none; }
+  #screen { display:block; width:480px; height:480px; image-rendering:auto; border-radius:8px; background:#000; }
+
+  /* tabs and cells (banks, samples, pools) */
+  .tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px; }
+  .tabs button.on { background:var(--red); border-color:var(--red); }
+  .slots { display:grid; grid-template-columns: repeat(4, 1fr); gap:4px; }
+  .slots.eight { grid-template-columns: repeat(8, 1fr); }
+  .slot { background:var(--raise); border:1px solid var(--line); border-radius:3px; min-height:40px; padding:4px; font-size:11px; cursor:pointer; color:var(--steel); overflow:hidden; }
+  .slot.used { background:rgba(255,42,42,.14); border-color:var(--red); color:var(--text); }
+  .slot.sel { outline:2px solid var(--red); }
+  .slot .n { font-weight:700; color:var(--text); }
+  .slot .x { float:right; background:none; border:none; color:var(--steel); padding:0 3px; cursor:pointer; font-size:12px; }
+  .slot .x:hover { color:var(--red); }
+  .membar { position:relative; height:22px; background:var(--raise); border:1px solid var(--line); border-radius:3px; margin:6px 0; overflow:hidden; }
+  .membar .fill { position:absolute; left:0; top:0; bottom:0; width:0; background:var(--red-deep); transition:width .3s; }
+  .membar.full .fill { background:var(--red); }
+  .membar span { position:relative; display:block; padding:3px 8px; font-size:11px; color:var(--text); }
+  .note { color:var(--gold); font-size:11px; margin-top:6px; }
+
+  /* arrangement viewer: scenes as columns, tracks as rows, a lit cell = the track sounds in that scene */
+  .arr { width:100%; max-width:560px; }
+  .arr-grid { display:grid; grid-template-columns: 110px repeat(4, 1fr); gap:4px; font-size:11px; }
+  .arr-h { color:var(--steel); text-align:center; letter-spacing:.1em; text-transform:uppercase; padding:4px 0; }
+  .arr-drag { cursor:grab; color:var(--red); }
+  .arr-drag:hover { color:var(--text); }
+  .arr-l { color:var(--text); display:flex; align-items:center; padding:0 4px; white-space:nowrap; }
+  .arr-c { height:30px; background:var(--surf); border:1px solid var(--raise); border-radius:3px; }
+  .arr-c.on { background:rgba(255,42,42,.45); border-color:var(--red); }
+  .arr-c.on.gold { background:rgba(253,207,61,.35); border-color:var(--gold); }
+
+  /* sound editor */
+  #params { width:100%; }
+  .editor { display:flex; flex-direction:column; gap:10px; }
+  .editor .panel { background:var(--surf); border:1px solid var(--raise); border-radius:3px; padding:10px; }
+  .sec-head { display:flex; gap:8px; align-items:center; color:var(--red); letter-spacing:.14em; font-size:12px; text-transform:uppercase; border-bottom:1px solid var(--raise); padding-bottom:6px; margin-bottom:8px; }
+  .sec-icon { color:var(--red); }
+  .op { border:1px solid var(--raise); border-radius:3px; margin-bottom:8px; padding:8px; background:var(--bg); }
+  .op-head { display:flex; gap:8px; align-items:center; color:var(--text); font-size:12px; }
+  .op-num { color:var(--red); font-weight:700; }
+  .badge { font-size:10px; padding:2px 6px; border:1px solid; border-radius:2px; letter-spacing:.1em; }
+  .badge.carrier { color:var(--red); border-color:var(--red); }
+  .badge.modulator { color:var(--gold); border-color:var(--gold); }
+  .op-body { display:grid; grid-template-columns: 1fr; gap:8px; margin-top:8px; }
+  .env { width:100%; height:64px; background:var(--bg); border:1px solid var(--raise); border-radius:2px; }
+  .env-fill { fill: rgba(255,42,42,.18); }
+  .env-line { fill:none; stroke:var(--red); stroke-width:2; }
+  .op-grid, .fx-grid, .rest-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px; min-width:0; }
+  .ctl { background:var(--surf); border:1px solid var(--raise); padding:5px 6px; border-radius:3px; min-width:0; }
+  .ctl-label { font-size:10px; letter-spacing:.12em; color:var(--steel); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ctl-row { display:flex; gap:6px; align-items:center; min-width:0; }
+  .ctl-row input[type=range] { flex:1; min-width:0; accent-color:var(--red); }
+  .ctl-row input[type=number] { width:52px; flex:none; background:var(--bg); color:var(--text); border:1px solid var(--line); text-align:right; padding:2px; }
+  .ctl.off { opacity:.35; }
+  .fx-card { background:var(--surf); border:1px solid var(--raise); border-radius:3px; padding:8px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .fx-title { color:var(--text); font-size:11px; letter-spacing:.14em; border:1px solid var(--line); padding:3px 6px; display:inline-block; }
+  .fx-note { font-size:11px; color:var(--steel); }
+  .rest-grid .ctl-label { font-size:9px; }
+
+  /* bottom: file list */
+  .bottom { border-top:2px solid var(--raise); display:grid; grid-template-rows:auto 1fr; min-height:0; background:var(--surf); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--raise); font-size:12px; }
+  th { color:var(--steel); font-weight:600; }
+  tr[draggable] { cursor:grab; }
+  tr[draggable]:hover { background:var(--raise); }
+  tr.sel { background:rgba(255,42,42,.14); }
+  .empty { color:var(--steel); padding:10px 12px; font-size:12px; }
+
+  /* clip editor: piano roll / drum sequencer grid */
+  .ce-head { color:var(--red); font-size:12px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; }
+  .ce-wrap { display:flex; border:1px solid var(--raise); border-radius:3px; background:#000; max-height:60vh; }
+  .ce-labels { flex:none; width:64px; background:var(--surf); border-right:1px solid var(--raise); }
+  .ce-label { font-size:10px; color:var(--steel); line-height:14px; padding-left:6px; border-bottom:1px solid var(--raise); white-space:nowrap; }
+  .ce-label.drum { color:var(--text); }
+  .ce-scroll { overflow:auto; flex:1; }
+  .ce-canvas { display:block; cursor:crosshair; }
+  .ce-bar { display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:10px; font-size:12px; color:var(--steel); }
+  .ce-bar span { margin-right:auto; }
+
+  /* kit dialog */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:10; }
+  .modal[hidden] { display:none; }
+  .modal .box { background:var(--surf); border:2px solid var(--red); border-radius:4px; padding:16px; min-width:300px; }
+  .modal .kits { display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin:10px 0; }
+  .modal .kits label { color:var(--text); font-size:13px; }
+  .modal .btns { display:flex; gap:8px; justify-content:flex-end; }
+</style>
+</head>
+<body>
+<div id="splash"><img src="renderer/assets/trapstation-logo.png" alt="Trapstation"></div>
+<header>
+  <img class="brand" src="renderer/assets/trapstation-logo.png" alt="">
+  <b>TRAPSTATION</b><span>SAMPLING WORKSTATION · DESKTOP</span>
+</header>
+
+<div class="main">
+  <!-- left: converter, its file list right below, then the sampler -->
+  <section class="col">
+    <div class="sec">
+      <h2>Converter</h2>
+      <div id="drop">Drop an audio file here<br>(WAV, MP3, FLAC, …) or click</div>
+      <input id="file" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.opus,.m4a,.aiff" hidden>
+      <p id="conv" class="hint"></p>
+      <div class="btnrow">
+        <button id="save" disabled>Save as SYX</button>
+        <button id="sendBtn" class="primary" disabled>Send selected file</button>
+      </div>
+      <div id="status"></div>
+    </div>
+    <div class="sec">
+      <h2>Files · drag onto a sampler slot</h2>
+      <div class="filelist">
+        <table><thead><tr><th>Name</th><th>Rate</th><th>Length</th><th>Bytes</th></tr></thead><tbody id="list"></tbody></table>
+        <div class="empty" id="empty">No file converted yet.</div>
+      </div>
+    </div>
+    <div class="sec">
+      <h2>Sampler · S01–S32</h2>
+      <div class="btnrow"><button id="samp">Read samples</button></div>
+      <p class="hint">Drag a file from the list onto a slot to insert it there.</p>
+      <div id="membar" class="membar"><div class="fill" id="memfill"></div><span id="memtxt">Memory: not read</span></div>
+      <div class="slots" id="sslots"></div>
+    </div>
+  </section>
+
+  <!-- centre: the device -->
+  <section class="col center" id="device">
+    <div class="btnrow">
+      <button id="probe">Find device</button>
+      <button id="connect" class="primary">Connect</button>
+      <button id="snap" disabled style="display:none">Refresh banks</button>
+      <button id="disc" disabled>Disconnect</button>
+      <button id="ableton">Ableton export</button>
+    </div>
+    <div class="bezel"><canvas id="screen" width="240" height="240"></canvas></div>
+    <div id="mstat"></div>
+    <div class="arr">
+      <div class="btnrow" style="justify-content:space-between;width:100%"><h2 style="margin:0">Arrangement · export order</h2><button id="arrread">Read arrangement</button></div>
+      <div id="arr" class="arr-grid"><div class="hint">Not read yet. “Read arrangement” shows scenes and tracks.</div></div>
+    </div>
+  </section>
+
+  <!-- right: bank management and the preset / sound editor -->
+  <section class="col">
+    <div class="sec">
+      <h2>Banks A–E · factory presets</h2>
+      <div class="tabs" id="abetabs"></div>
+      <div class="slots eight" id="abeslots"></div>
+      <div class="note">Click a preset to show its parameters.</div>
+    </div>
+    <div class="sec">
+      <h2>Preset and sound editor</h2>
+      <div id="params"></div>
+    </div>
+  </section>
+</div>
+
+
+<div id="clipdlg" class="modal" hidden>
+  <div class="box" style="width:min(1000px,92vw);max-height:88vh;overflow:auto">
+    <div id="clipbody"></div>
+  </div>
+</div>
+<div id="kitdlg" class="modal" hidden>
+  <div class="box">
+    <h2>Kits for the Ableton export</h2>
+    <div class="kits">
+      <label><input type="checkbox" value="1"> Kit 1</label>
+      <label><input type="checkbox" value="2"> Kit 2</label>
+      <label><input type="checkbox" value="3"> Kit 3</label>
+      <label><input type="checkbox" value="4"> Kit 4</label>
+      <label><input type="checkbox" value="5"> Kit 5</label>
+      <label><input type="checkbox" value="6"> Kit 6</label>
+    </div>
+    <div class="btns">
+      <button id="kitall">All</button>
+      <button id="kitcancel">Cancel</button>
+      <button id="kitok" class="primary">Next</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="renderer/app.js"></script>
+</body>
+</html>

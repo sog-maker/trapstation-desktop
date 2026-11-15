@@ -1,0 +1,46 @@
+{
+    "private":  true,
+    "description":  "Trap Station desktop: sample converter, arrangement and Ableton export for the Trapstation firmware",
+    "license":  "GPL-3.0-only",
+    "version":  "0.1.0",
+    "scripts":  {
+                    "start":  "electron .",
+                    "dist":  "electron-builder --win nsis"
+                },
+    "name":  "trapstation-desktop",
+    "main":  "main.js",
+    "devDependencies":  {
+                            "electron":  "^33.2.0",
+                            "electron-builder":  "^25.1.8"
+                        },
+    "productName":  "Trap Station",
+    "build":  {
+                  "files":  [
+                                "main.js",
+                                "preload.js",
+                                "renderer/**/*",
+                                "web/**/*",
+                                "package.json",
+                                "LICENSE"
+                            ],
+                  "productName":  "Trap Station",
+                  "extraResources":  [
+                                         {
+                                             "to":  "ableton",
+                                             "from":  "ableton"
+                                         }
+                                     ],
+                  "win":  {
+                              "target":  [
+                                             "nsis"
+                                         ],
+                              "icon":  "renderer/assets/trapstation.ico",
+                              "signAndEditExecutable":  false
+                          },
+                  "appId":  "org.trapstation.desktop",
+                  "nsis":  {
+                               "oneClick":  false,
+                               "allowToChangeInstallationDirectory":  true
+                           }
+              }
+}
