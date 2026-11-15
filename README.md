@@ -62,8 +62,8 @@ you, open an [issue](https://github.com/sog-maker/trapstation-desktop/issues) wi
 
 From the [latest release](https://github.com/sog-maker/trapstation-desktop/releases/latest):
 
-- `Trap Station Setup 0.1.1.exe`: the installer (Windows may warn that it is not signed: More info > Run anyway)
-- `Trap Station-0.1.1-win.zip`: the program without installing, for `scripts/install.ps1` (below)
+- `Trap.Station.Setup.0.1.1.exe`: the installer (Windows may warn that it is not signed: More info > Run anyway)
+- `Trap.Station-0.1.1-win.zip`: the program without installing, for `scripts/install.ps1` (below)
 
 ## Requirements
 
