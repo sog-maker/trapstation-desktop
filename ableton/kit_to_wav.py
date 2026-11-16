@@ -31,7 +31,7 @@ KIT_BYTES = 1272                              # one kit of a GBK3 object (3 kits
 ENGINE_NAME = {1: "DIGITAL", 2: "ANALOG", 3: "SAMPLER", 4: "MONO", 5: "FM6"}
 ENGI_FM6 = 5                                  # core.h
 FM6_LEN = 158                                 # eng_trap_fm6.c tf6_edit: 155 voice bytes + DRIVE, CUTOFF, OUTPUT
-JAM1, JAM6 = 0x314D414A, 0x364D414A
+JAM1, JAM6, JAM7 = 0x314D414A, 0x364D414A, 0x374D414A
 # the renderers are bundled next to this file (or inside the .exe): one per firmware engine set
 HERE = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 RENDER = os.path.join(HERE, "render_scenes.exe")            # firmware 1.0.0.0 (JAM1)
@@ -48,56 +48,112 @@ def u16(b, i):
 
 
 def parse_jam(obj9, obj17):
-    """JAM1 / JAM6 stream: globals, the six tracks (engine, params, steps), the scene masks, the FM6 voices."""
+    """JAM1 / JAM6 / JAM7 stream: globals, the six tracks (engine, params, steps), the scene masks, the FM6 voices.
+
+    JAM7 (firmware 1.1.0.1 and later): the big blocks packed in pieces of 16 bytes, each a mask of its bytes that are
+    not 0, then those bytes (gb_store.c jam_wb); at the end only the FM6 tracks' voices."""
     # the second object continues the first only when both carry the same generation number (gb_store.c)
     jam = obj9[4:] + (obj17[4:] if obj17[:4] == obj9[:4] else b"")
     magic = struct.unpack_from("<I", jam, 0)[0]
-    if magic not in (JAM1, JAM6):
-        raise ValueError("no JAM1 or JAM6 stream")
+    if magic not in (JAM1, JAM6, JAM7):
+        raise ValueError("no JAM1, JAM6 or JAM7 stream")
+    pk = magic == JAM7
+    pos = [4]
+
+    def block(length):
+        i = pos[0]
+        if not pk:
+            pos[0] = i + length
+            return bytes(jam[i:i + length])
+        out = bytearray(length)
+        for o in range(0, length, 16):
+            e = min(16, length - o)
+            m = u16(jam, i)
+            i += 2
+            for k in range(e):
+                if m & (1 << k):
+                    out[o + k] = jam[i]
+                    i += 1
+        pos[0] = i
+        return bytes(out)
+
     i = 4
     ng = jam[i + 3]
     i += 4
     G = [i16(jam, i + 2 * k) for k in range(ng)]
     i += 2 * ng
     for _ in range(2):                        # pm_mac, fxl blocks
-        i += 2 + u16(jam, i)
+        n = u16(jam, i)
+        pos[0] = i + 2
+        block(n)
+        i = pos[0]
     i += 2 + 4 * jam[i]                       # motion: count, on, events (4 bytes each)
-    np_, ssz = jam[i], jam[i + 1]
+    np_, ssz = jam[i], jam[i + 1] & 0x7F
     i += 2
     tracks = []
     for _ in range(6):
         eng = jam[i]
-        i += 1
-        params = [i16(jam, i + 2 * k) for k in range(np_)]
-        i += 2 * np_
+        pos[0] = i + 1
+        pb = block(2 * np_)
+        i = pos[0]
+        params = [i16(pb, 2 * k) for k in range(np_)]
         n = jam[i]
         i += 1
         steps = {}
         for _ in range(n):
             at = jam[i]
-            steps[at] = bytes(jam[i + 1:i + 1 + ssz])
-            i += 1 + ssz
+            pos[0] = i + 1
+            steps[at] = block(ssz)
+            i = pos[0]
         tracks.append({"eng": eng, "params": params, "steps": steps})
     n_keys = jam[i]
     i += 1
     for _ in range(n_keys):
         c = jam[i + 1]
         i += 2 + 3 * c
-    for _ in range(4):                        # acid, lastc+lastn, chord_cfg, tape_cfg
+    n = u16(jam, i)                           # acid
+    pos[0] = i + 2
+    block(n)
+    i = pos[0]
+    for _ in range(3):                        # lastc+lastn, chord_cfg, tape_cfg
         i += 2 + u16(jam, i)
     sz = u16(jam, i)
     ph = [i16(jam, i + 2 + 2 * k) for k in range(sz // 2)]
-    # JAM6: sized blocks follow; the one of 6 x 158 values holds the FM6 voices of the six tracks
+    i += 2 + sz
     fm6 = None
     if magic == JAM6:
-        k = i + 2 + sz
+        # sized blocks follow; the one of 6 x 158 values holds the FM6 voices of the six tracks
+        k = i
         while k + 2 <= len(jam):
             n = u16(jam, k)
             if n == 6 * FM6_LEN * 2 and k + 2 + n <= len(jam):
                 fm6 = [[i16(jam, k + 2 + 2 * (t * FM6_LEN + j)) for j in range(FM6_LEN)] for t in range(6)]
                 break
             k += 2 + n
-    return {"G": G, "tracks": tracks, "masks": ph[2:6], "fm6_format": magic == JAM6, "fm6": fm6}
+    elif pk:
+        # the generator block and the slices (packed), then a track mask and each FM6 track's voice
+        for _ in range(2):
+            n = u16(jam, i)
+            pos[0] = i + 2
+            block(n)
+            i = pos[0]
+        n = u16(jam, i)
+        i += 2
+        if n >= 1 and i + n <= len(jam):
+            mask = jam[i]
+            i += 1
+            fm6 = [None] * 6
+            for t in range(6):
+                if not mask & (1 << t):
+                    continue
+                v = list(jam[i:i + 155])
+                i += 155
+                v += [i16(jam, i + 2 * j) for j in range(3)]
+                i += 6
+                fm6[t] = v
+            if not any(fm6):
+                fm6 = None
+    return {"G": G, "tracks": tracks, "masks": ph[2:6], "fm6_format": magic != JAM1, "fm6": fm6}
 
 
 def parse_kits(obj13, obj14):
@@ -155,7 +211,7 @@ def write_spec(path, jam, kit, audible, scene_ms, total_ms, samples_path):
 
 
 def track_is_fm6(jam, t):
-    return bool(jam.get("fm6")) and jam["tracks"][t]["eng"] == ENGI_FM6
+    return bool(jam.get("fm6")) and jam["fm6"][t] is not None and jam["tracks"][t]["eng"] == ENGI_FM6
 
 
 def scene_length_ms(jam, beat_ms):

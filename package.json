@@ -2,7 +2,7 @@
     "private":  true,
     "description":  "Trap Station desktop: sound editor, sample converter, arrangement and Ableton export for the Trapstation firmware",
     "license":  "GPL-3.0-only",
-    "version":  "0.2.0",
+    "version":  "0.2.1",
     "scripts":  {
                     "start":  "electron .",
                     "dist":  "electron-builder --win"
