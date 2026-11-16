@@ -7,8 +7,8 @@ the computer side of <a href="https://github.com/sog-maker/trapstation-os">TRAPS
 a sound editor for the FM6 engine, samples, a live screen, and your jam as an Ableton Live project</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.1-c62d39" alt="Version 0.2.1">
-  <img src="https://img.shields.io/badge/firmware-TRAPSTATION%20OS%201.1.0.1-c62d39" alt="For TRAPSTATION OS 1.1.0.1">
+  <img src="https://img.shields.io/badge/version-0.2.2-c62d39" alt="Version 0.2.2">
+  <img src="https://img.shields.io/badge/firmware-TRAPSTATION%20OS%201.1.0.2-c62d39" alt="For TRAPSTATION OS 1.1.0.2">
   <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-555" alt="Windows 10 and 11">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only"></a>
 </p>
@@ -16,6 +16,18 @@ a sound editor for the FM6 engine, samples, a live screen, and your jam as an Ab
 <p align="center">The firmware, its installer and its user guide:
 <a href="https://github.com/sog-maker/trapstation-os">sog-maker/trapstation-os</a> ·
 install TRAPSTATION OS in the browser: <a href="https://sog-maker.github.io/trapstation-os/">the online installer</a></p>
+
+## What's new in 0.2.2
+
+- **A new layout in three columns.** Converter and sampler on the left, the FM-1 with the arrangement in the middle,
+  my sounds, the banks and the editor on the right.
+- **The arrangement as on the FM-1:** tracks T1–T6 across, scenes down, as the FM-1's scene screen shows them.
+- **A sturdier Ableton export.** Kits that are not saved on the FM-1 are skipped instead of stopping the export (the
+  message names them), and the FM-1 leaves its backup screen after a read error too.
+- **Scene MIDI files** carry the tempo in a track of their own, and each track is named (Track 1–6), so Ableton shows
+  the names.
+- For TRAPSTATION OS 1.1.0.2: kits on the FM-1 keep a track's FM6 preset, not the changes on the FM6 pages. Click
+  **Read FM-1 tracks** after a session to keep those sounds here.
 
 ## What's new in 0.2.1
 
@@ -38,8 +50,8 @@ bells, organs, pads and leads on it. The app is reworked around that:
   FM-1 drawn around the mirrored screen. Without a device the computer keys A W S E D F … play.
 - **My sounds.** Keep edited copies on the computer, import DX7 voices and 32-voice banks (`.syx`), export a voice as
   a DX7 file, and read the FM6 sounds of your six tracks from the FM-1.
-- **One page.** Banks on the left, the FM-1 in the middle with arrangement, converter and sampler below it, the editor
-  on the right. A click enlarges the FM-1 and its screen.
+- **One page.** Banks, the FM-1 with its arrangement, converter and sampler, and the editor on one page (rearranged
+  in 0.2.2). A click enlarges the FM-1 and its screen.
 - **Ableton export for 1.1 jams.** FM6 tracks are rendered with their own sound.
 
 ## What it does
@@ -56,7 +68,7 @@ bells, organs, pads and leads on it. The app is reworked around that:
 
 ## Status of this build
 
-**Version 0.2.1, for TRAPSTATION OS 1.1.0.1** (identity `FM-1_511`; 1.1.0.0 works too). The factory sounds in the app are those of
+**Version 0.2.2, for TRAPSTATION OS 1.1.0.2** (identity `FM-1_511`; 1.1.0.1 and 1.1.0.0 work too). The factory sounds in the app are those of
 1.1.0.0. With 1.0.0.0 on the FM-1 the converter, sampler, screen, arrangement and export still work; the editor then
 shows sounds that device does not have.
 
@@ -91,7 +103,7 @@ shows sounds that device does not have.
 - SLICE settings of a sample: kept with the last jam on the device, not shown in the app
 - macOS and Linux
 
-Every function of this build has been tested on a FM-1 with TRAPSTATION OS 1.1.0.1: the arrangement, the piano roll,
+Every function of this build has been tested on a FM-1 with TRAPSTATION OS 1.1.0.1 and 1.1.0.2: the arrangement, the piano roll,
 reading the FM6 sounds and the Ableton export of a full jam (six tracks of 64 steps) in the new format, and the FM-1's
 keys playing the editor's sound. If something does not work
 for you, open an [issue](https://github.com/sog-maker/trapstation-desktop/issues) with what you did and what the app
@@ -101,13 +113,13 @@ said.
 
 From the [latest release](https://github.com/sog-maker/trapstation-desktop/releases/latest):
 
-- `Trap.Station.Setup.0.2.1.exe`: the installer (Windows may warn that it is not signed: More info > Run anyway)
-- `Trap.Station-0.2.1-win.zip`: the program without installing, for `scripts/install.ps1` (below)
+- `Trap.Station.Setup.0.2.2.exe`: the installer (Windows may warn that it is not signed: More info > Run anyway)
+- `Trap.Station-0.2.2-win.zip`: the program without installing, for `scripts/install.ps1` (below)
 
 ## Requirements
 
 - Windows 10 or 11
-- TRAPSTATION OS 1.1.0.1 on the FM-1 ([install it here](https://sog-maker.github.io/trapstation-os/))
+- TRAPSTATION OS 1.1.0.2 on the FM-1 ([install it here](https://sog-maker.github.io/trapstation-os/))
 - [ffmpeg](https://ffmpeg.org/) with libopus, on the `PATH`, for the converter
 - Python 3.10 or newer (standard library only), for the Ableton export
 - A USB data cable, the FM-1 straight into the computer, other music apps closed
@@ -125,7 +137,7 @@ npm start
 npm run dist
 ```
 
-This creates `dist/Trap Station Setup 0.2.1.exe` (an installer) and `dist/Trap Station-0.2.1-win.zip`. The Ableton
+This creates `dist/Trap Station Setup 0.2.2.exe` (an installer) and `dist/Trap Station-0.2.2-win.zip`. The Ableton
 tools go along as extra resources next to the program.
 
 ## Rebuild the sound engine
@@ -149,7 +161,7 @@ sh ableton/src/build.sh /path/to/trapstation-os
 ## Install with PowerShell
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Zip ".\dist\Trap Station-0.2.1-win.zip"
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Zip ".\dist\Trap Station-0.2.2-win.zip"
 ```
 
 The script unpacks the program to `%LOCALAPPDATA%\Programs\Trap Station` and adds a Start menu and a desktop shortcut.
