@@ -76,6 +76,9 @@ shows sounds that device does not have.
 
 **Good to know**
 
+- **Keep your FM6 sounds:** on the FM-1, kits and sound slots keep a track's FM6 preset, not the changes made on the
+  FM6 pages; those live in the last jam only. After a session, click **Read FM-1 tracks** before you load another kit or
+  change the jam, and the sounds stay in My sounds on the computer
 - In the Ableton export an FM SYN track plays the jam's own FM6 sound in every kit, because kits do not hold FM6 sounds
 - DRIVE, CUTOFF and OUTPUT are TRAPSTATION's own: a DX7 file does not carry them. "Export" keeps a sound with all its
   values
