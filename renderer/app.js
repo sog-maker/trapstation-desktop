@@ -352,7 +352,11 @@ async function exportAbleton() {
     if (!link) await connect();
     if (!link) { setMirror("No FM-1 connected."); return; }
     await screen.pause();
-    const objs = await readObjects(link, [9, 13, 14, 17], setMirror);
+    const objs = await readObjects(link, [9, 13, 14, 17], setMirror, [13, 14]);
+    // kits 1–3 live in object 13, kits 4–6 in object 14; an empty object's kits are skipped
+    const kitsUse = kits.filter((k) => objs[13 + Math.floor((k - 1) / 3)]);
+    const kitsSkip = kits.filter((k) => !kitsUse.includes(k));
+    if (!kitsUse.length) { setMirror("Export cancelled: the chosen kits are not saved on the FM-1 (empty or damaged). Change a kit, wait a moment with nothing playing, then export again."); return; }
     const samples = await readSampleRegion(link, setMirror);
     const doc = { objects: {}, samples: b64(samples) };
     for (const id of Object.keys(objs)) doc.objects[id] = b64(objs[id]);
@@ -363,7 +367,7 @@ async function exportAbleton() {
     lastJam = jam;
     const files = trackFiles(jam);
     setMirror("Ableton export läuft (Kits werden gerendert)…");
-    const als = await window.bridge.ableton(src, outDir, kits);
+    const als = await window.bridge.ableton(src, outDir, kitsUse);
     // the same notes as JSON for the .als: one MIDI track per track, each clip at its scene position
     const per = sceneTicks(jam);
     const midi = { scene_beats: per / 480, tracks: [] };
@@ -379,7 +383,8 @@ async function exportAbleton() {
     const midiBytes = new TextEncoder().encode(JSON.stringify(midi));
     const clipDir = await window.bridge.writeClips(outDir, [...files, { name: "midi-daten.json", bytes: midiBytes }]);
     await window.bridge.addMidi(als, clipDir);
-    setMirror(`Ableton export done (kits ${kits.join(", ")}): ${als} · ${midi.tracks.length} MIDI tracks in the project · files in ${clipDir}`);
+    const skipped = kitsSkip.length ? ` · skipped (not saved on the FM-1): kits ${kitsSkip.join(", ")}` : "";
+    setMirror(`Ableton export done (kits ${kitsUse.join(", ")}): ${als} · ${midi.tracks.length} MIDI tracks in the project · files in ${clipDir}${skipped}`);
   } catch (e) {
     setMirror("Error in the Ableton export: " + e.message);
   } finally {
@@ -389,12 +394,16 @@ async function exportAbleton() {
 $("ableton").onclick = exportAbleton;
 
 // ---------- arrangement viewer: the four scenes in export order (read only) ----------
+// as the FM-1's scene screen: tracks across (T1–T6), scenes down; a lit cell = the track plays in that scene
 function renderArrangement(j) {
   const box = $("arr");
   box.innerHTML = "";
   box.appendChild(Object.assign(document.createElement("div"), { className: "arr-h", textContent: "" }));
+  j.tracks.forEach((tr, t) => {
+    box.appendChild(Object.assign(document.createElement("div"), { className: "arr-h", textContent: `T${t + 1}`, title: `${Object.keys(tr.steps).length} Steps` }));
+  });
   for (let s = 0; s < 4; s++) {
-    const h = Object.assign(document.createElement("div"), { className: "arr-h arr-drag", textContent: `Scene ${s + 1} ⇢`, title: "Drag: scene as MIDI into Ableton" });
+    const h = Object.assign(document.createElement("div"), { className: "arr-l arr-drag", textContent: `Scene ${s + 1} ⇢`, title: "Drag: scene as MIDI into Ableton" });
     h.draggable = true;
     h.ondragstart = (e) => {
       e.preventDefault();
@@ -402,17 +411,13 @@ function renderArrangement(j) {
       else setMirror("Scene not prepared yet. Read the arrangement again.");
     };
     box.appendChild(h);
-  }
-  j.tracks.forEach((tr, t) => {
-    const steps = Object.keys(tr.steps).length;
-    box.appendChild(Object.assign(document.createElement("div"), { className: "arr-l", textContent: `T${t + 1} · ${steps} Steps` }));
-    for (let s = 0; s < 4; s++) {
+    j.tracks.forEach((tr, t) => {
       const on = (j.masks[s] >> t) & 1;
       const cell = Object.assign(document.createElement("div"), { className: "arr-c" + (on ? " on" : ""), title: on ? "Double-click: open clip" : "not used" });
       if (on) cell.ondblclick = () => openClip(s, t);
       box.appendChild(cell);
-    }
-  });
+    });
+  }
 }
 
 // ---------- clips: editable in the app (no write to the FM-1); the edits feed the MIDI export ----------
@@ -428,7 +433,7 @@ async function prepareScenes() {
     const tracks = [];
     for (let t = 0; t < 6; t++) {
       if (!clipOf(lastJam, t, s).on) continue;
-      tracks.push({ notes: clipNotesOf(s, t) });
+      tracks.push({ name: `Track ${t + 1}`, notes: clipNotesOf(s, t) });   // the jam's own track number, as in the export
     }
     if (!tracks.length) { scenePaths[s] = null; continue; }
     const bytes = smfScene(tracks, per, lastJam.G[0]);

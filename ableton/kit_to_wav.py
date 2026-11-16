@@ -157,10 +157,13 @@ def parse_jam(obj9, obj17):
 
 
 def parse_kits(obj13, obj14):
-    """GBK3 kit objects: 8-byte header, 3 kits per object. Returns 6 kits of 6 tracks."""
+    """GBK3 kit objects: 8-byte header, 3 kits per object. Returns 6 kits of 6 tracks; None for an object not saved."""
     kits = []
     for obj in (obj13, obj14):
         for k in range(3):
+            if obj is None:
+                kits.append(None)
+                continue
             kb = obj[8 + k * KIT_BYTES: 8 + (k + 1) * KIT_BYTES]
             tracks = []
             for t in range(6):
@@ -242,7 +245,7 @@ def main():
     render = RENDER_FM6 if jam["fm6_format"] else RENDER
     if not os.path.exists(render):
         raise FileNotFoundError(f"the renderer is missing: {render}")
-    kits = parse_kits(obj[13], obj[14])
+    kits = parse_kits(obj.get(13), obj.get(14))
     beat_ms = 60000.0 / jam["G"][0]           # G_BPM
     scene_ms = scene_length_ms(jam, beat_ms)
     total_ms = 4 * scene_ms + 1000.0
@@ -253,7 +256,7 @@ def main():
         f.write(base64.b64decode(d["samples"]))
     wanted = [int(x) for x in sys.argv[3].split(",")] if len(sys.argv) > 3 and sys.argv[3] else None   # optional kit list "1,3"
     for ki, kit in enumerate(kits, start=1):
-        if wanted and ki not in wanted:
+        if kit is None or (wanted and ki not in wanted):
             continue
         for t in range(6):
             spec = os.path.join(tmp, f"k{ki}t{t + 1}.txt")

@@ -63,8 +63,11 @@ export function sceneTicks(jam) {
 // one scene as a Standard MIDI File, format 1: one MIDI track per jam track (tracks = [{ notes }]), tempo from the jam
 export function smfScene(tracks, lengthTicks, bpm) {
   const vlq = (v) => { const out = [v & 127]; v >>= 7; while (v) { out.unshift((v & 127) | 128); v >>= 7; } return out; };
-  const chunks = [];
-  tracks.forEach((tr, ti) => {
+  const chunk = (body) => [0x4D, 0x54, 0x72, 0x6B, (body.length >>> 24) & 255, (body.length >>> 16) & 255, (body.length >>> 8) & 255, body.length & 255, ...body];
+  // the tempo has a track of its own (format 1 convention): Ableton takes it as the conductor, not as one of the six tracks
+  const us = Math.round(60000000 / (bpm || 120));
+  const chunks = [chunk([...vlq(0), 0xFF, 0x51, 0x03, (us >> 16) & 255, (us >> 8) & 255, us & 255, ...vlq(0), 0xFF, 0x2F, 0x00])];
+  for (const tr of tracks) {
     const ev = [];
     for (const n of tr.notes) {
       ev.push({ tick: n.tick, order: 1, bytes: [0x90, n.note & 127, n.vel & 127] });
@@ -72,16 +75,14 @@ export function smfScene(tracks, lengthTicks, bpm) {
     }
     ev.sort((a, b) => a.tick - b.tick || a.order - b.order);
     const body = [];
-    if (ti === 0) {
-      const us = Math.round(60000000 / (bpm || 120));
-      body.push(...vlq(0), 0xFF, 0x51, 0x03, (us >> 16) & 255, (us >> 8) & 255, us & 255);
-    }
+    if (tr.name) { const nm = [...tr.name].map((c) => c.charCodeAt(0) & 127); body.push(...vlq(0), 0xFF, 0x03, nm.length, ...nm); }   // track name: Ableton shows it
     let last = 0;
     for (const e of ev) { body.push(...vlq(e.tick - last), ...e.bytes); last = e.tick; }
     body.push(...vlq(Math.max(0, lengthTicks - last)), 0xFF, 0x2F, 0x00);
-    chunks.push([0x4D, 0x54, 0x72, 0x6B, (body.length >>> 24) & 255, (body.length >>> 16) & 255, (body.length >>> 8) & 255, body.length & 255, ...body]);
-  });
-  const hdr = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 1, (tracks.length >> 8) & 255, tracks.length & 255, (PPQ >> 8) & 255, PPQ & 255];
+    chunks.push(chunk(body));
+  }
+  const ntrk = chunks.length;
+  const hdr = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 1, (ntrk >> 8) & 255, ntrk & 255, (PPQ >> 8) & 255, PPQ & 255];
   return new Uint8Array([...hdr, ...chunks.flat()]);
 }
 

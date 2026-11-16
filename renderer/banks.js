@@ -58,25 +58,29 @@ export async function beginBackup(link) {
 }
 
 // reads any storage objects by id (read only); an empty object is an error for the export
-export async function readObjects(link, ids, onProgress = () => {}) {
+export async function readObjects(link, ids, onProgress = () => {}, optional = []) {
   await beginBackup(link);
   const out = {};
-  for (const id of ids) {
-    onProgress(`Reading object ${id}…`);
-    const st = await ask(link, BK.STAT, [id]);
-    if (!st || st[0] !== 0) throw new Error(`Object ${id}: no data (rc ${st ? st[0] : "–"}).`);
-    const len = rd32(st, 2), crc = rd32(st, 6);
-    const bytes = new Uint8Array(len);
-    for (let off = 0; off < len; off += CHUNK) {
-      const n = Math.min(CHUNK, len - off);
-      const r = await ask(link, BK.READ, [id, ...u32le(off), n & 255, n >> 8]);
-      if (!r || r[0] !== 0) throw new Error(`Object ${id}: reading at ${off} failed.`);
-      bytes.set(r.slice(6, 6 + n), off);
+  try {
+    for (const id of ids) {
+      onProgress(`Reading object ${id}…`);
+      const st = await ask(link, BK.STAT, [id]);
+      if (st && st[0] === 2 && optional.includes(id)) continue;   // empty (not saved on the FM-1): left out
+      if (!st || st[0] !== 0) throw new Error(`Object ${id}: no data (rc ${st ? st[0] : "–"}).`);
+      const len = rd32(st, 2), crc = rd32(st, 6);
+      const bytes = new Uint8Array(len);
+      for (let off = 0; off < len; off += CHUNK) {
+        const n = Math.min(CHUNK, len - off);
+        const r = await ask(link, BK.READ, [id, ...u32le(off), n & 255, n >> 8]);
+        if (!r || r[0] !== 0) throw new Error(`Object ${id}: reading at ${off} failed.`);
+        bytes.set(r.slice(6, 6 + n), off);
+      }
+      if (crc32(bytes) !== crc) throw new Error(`Object ${id}: CRC mismatch.`);
+      out[id] = bytes;
     }
-    if (crc32(bytes) !== crc) throw new Error(`Object ${id}: CRC mismatch.`);
-    out[id] = bytes;
+  } finally {
+    await ask(link, BK.END, []).catch(() => {});   // also after an error: the FM-1 leaves its backup screen
   }
-  await ask(link, BK.END, []);
   return out;
 }
 
@@ -87,14 +91,17 @@ export async function readSampleRegion(link, onProgress = () => {}) {
   if (!st || st[0] !== 0) throw new Error("Sample memory not readable (rc " + (st ? st[0] : "–") + ").");
   const len = rd32(st, 2);
   const region = new Uint8Array(len);
-  for (let off = 0; off < len; off += CHUNK) {
-    const n = Math.min(CHUNK, len - off);
-    if (off % (CHUNK * 64) === 0) onProgress(`Reading samples… ${Math.round(off / len * 100)}%`);
-    const r = await ask(link, BK.READ, [BK_SMP, ...u32le(off), n & 255, n >> 8]);
-    if (!r || r[0] !== 0) throw new Error("Sample memory: reading at " + off + " failed.");
-    region.set(r.slice(6, 6 + n), off);
+  try {
+    for (let off = 0; off < len; off += CHUNK) {
+      const n = Math.min(CHUNK, len - off);
+      if (off % (CHUNK * 64) === 0) onProgress(`Reading samples… ${Math.round(off / len * 100)}%`);
+      const r = await ask(link, BK.READ, [BK_SMP, ...u32le(off), n & 255, n >> 8]);
+      if (!r || r[0] !== 0) throw new Error("Sample memory: reading at " + off + " failed.");
+      region.set(r.slice(6, 6 + n), off);
+    }
+  } finally {
+    await ask(link, BK.END, []).catch(() => {});   // also after an error: the FM-1 leaves its backup screen
   }
-  await ask(link, BK.END, []);
   return region;
 }
 

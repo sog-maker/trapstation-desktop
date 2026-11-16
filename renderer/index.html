@@ -24,16 +24,20 @@
 
   [hidden] { display:none !important; }
 
-  /* one page: banks | editor | device */
-  .app { display:grid; grid-template-columns: 214px minmax(0,1fr) clamp(380px, 31vw, 460px); min-height:0; }
+  /* three columns: converter and sampler | the FM-1 with the arrangement below it | my sounds, banks and the editor */
+  .app { display:grid; grid-template-columns: 280px minmax(0,1fr) clamp(380px, 31vw, 460px); min-height:0; }
+  .leftcol { display:flex; flex-direction:column; min-height:0; min-width:0; overflow-y:auto; background:var(--surf); border-right:1px solid var(--raise); }
+  .leftcol > .sec { margin:0; padding:10px 14px; border-bottom:1px solid var(--raise); }
+  .sidecol { display:flex; flex-direction:column; min-height:0; min-width:0; overflow:hidden; background:var(--bg); border-left:1px solid var(--raise); }
+  .sidecol > .sec { flex:none; margin:0; padding:10px 14px; border-bottom:1px solid var(--raise); }
+  .sidecol > .edmain { flex:1 1 0; min-height:0; }
   .devcol { display:flex; flex-direction:column; align-items:center; gap:8px; background:var(--bg); }
   .devgrid { width:100%; display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:0 18px; align-items:start; }
   .devgrid .sec { border-bottom:none; border-top:1px solid var(--raise); padding-top:12px; }
-  .edmain { border-left:1px solid var(--raise); }
   .devcol > * { flex:none; }
   .devcol .sec { width:100%; }
   .devcol .btnrow { margin:0; }
-  .devcol .arr { max-width:none; }
+  .devcol .arr { width:50%; align-self:flex-start; }   /* the right half stays free for later */
   .devcol .filelist { max-height:150px; margin-top:6px; }
   .devcol #drop { padding:10px; }
 
@@ -92,17 +96,18 @@
 
   /* arrangement viewer: scenes as columns, tracks as rows, a lit cell = the track sounds in that scene */
   .arr { width:100%; max-width:560px; }
-  .arr-grid { display:grid; grid-template-columns: 110px repeat(4, 1fr); gap:4px; font-size:11px; }
+  .arr-grid { display:grid; grid-template-columns: 96px repeat(6, 1fr); gap:4px; font-size:11px; }
+  .arr-grid > .hint { grid-column:1 / -1; }
   .arr-h { color:var(--steel); text-align:center; letter-spacing:.1em; text-transform:uppercase; padding:4px 0; }
   .arr-drag { cursor:grab; color:var(--red); }
   .arr-drag:hover { color:var(--text); }
   .arr-l { color:var(--text); display:flex; align-items:center; padding:0 4px; white-space:nowrap; }
+  .arr-l.arr-drag { color:var(--red); }   /* the scene rows drag out as MIDI */
   .arr-c { height:30px; background:var(--surf); border:1px solid var(--raise); border-radius:3px; }
   .arr-c.on { background:rgba(255,42,42,.45); border-color:var(--red); }
   .arr-c.on.gold { background:rgba(253,207,61,.35); border-color:var(--gold); }
 
   /* ---------- sound editor view ---------- */
-  .edside { display:flex; flex-direction:column; }
   .slots.two { grid-template-columns: 1fr 1fr; }
   .slot .mach, .mine .mach { font-size:9px; letter-spacing:.1em; color:var(--steel); margin-top:2px; }
   .slot.fm .mach, .mine .mach { color:var(--red); }
@@ -244,47 +249,9 @@
   <b>TRAPSTATION</b><span>SAMPLING WORKSTATION · DESKTOP</span>
 </header>
 
-<!-- one page: banks and own sounds | the FM-1 with arrangement, converter and sampler | the sound editor -->
+<!-- one page: banks and sound editor (left, large) | the FM-1 with sampler (right) | my sounds, converter, arrangement (bottom left) -->
 <div class="app">
-  <aside class="col edside">
-    <div class="sec">
-      <h2>Banks A–E · factory presets</h2>
-      <div class="tabs" id="abetabs"></div>
-      <div class="slots two" id="abeslots"></div>
-    </div>
-    <div class="sec">
-      <h2>My sounds</h2>
-      <div class="minelist" id="minelist"></div>
-      <div class="hint" id="mineempty">None yet. “Save as mine” keeps an edited copy; a DX7 file (.syx) can be dropped on the editor.</div>
-      <div class="btnrow">
-        <button id="edimport" title="A DX7 voice or 32-voice bank (.syx), or a Trapstation sound (.json)">Import…</button>
-        <button id="edread" title="Reads the FM6 voices of the six tracks from the last project on the FM-1. Read only.">Read FM-1 tracks</button>
-      </div>
-      <input id="edfile" type="file" accept=".syx,.json" hidden>
-    </div>
-    <div class="hint">Sounds and edits stay on this PC. The editor plays through the sound engine of the firmware itself.</div>
-  </aside>
-
-  <section class="col devcol" id="device">
-    <div class="fm1wrap" id="fm1wrap" title="Click to enlarge">
-      <div class="fm1">
-        <svg id="fm1panel" aria-hidden="true"></svg>
-        <canvas id="screen" width="240" height="240"></canvas>
-      </div>
-    </div>
-    <div class="btnrow">
-      <button id="connect" class="primary">Connect</button>
-      <button id="disc" disabled>Disconnect</button>
-      <button id="probe">Find device</button>
-      <button id="snap" disabled style="display:none">Refresh banks</button>
-      <button id="ableton">Ableton export</button>
-    </div>
-    <div id="mstat"></div>
-    <div class="devgrid">
-    <div class="sec arr">
-      <div class="btnrow" style="justify-content:space-between;width:100%"><h2 style="margin:0">Arrangement · export order</h2><button id="arrread">Read arrangement</button></div>
-      <div id="arr" class="arr-grid"><div class="hint">Not read yet. “Read arrangement” shows scenes and tracks.</div></div>
-    </div>
+  <div class="leftcol">
     <div class="sec">
       <h2>Converter</h2>
       <div id="drop">Drop an audio file here (WAV, MP3, FLAC, …) or click</div>
@@ -304,11 +271,46 @@
       <h2>Sampler · S01–S32</h2>
       <div class="btnrow"><button id="samp">Read samples</button></div>
       <div id="membar" class="membar"><div class="fill" id="memfill"></div><span id="memtxt">Memory: not read</span></div>
-      <div class="slots" id="sslots"></div>
+      <div class="slots eight" id="sslots"></div>
     </div>
+  </div>
+  <section class="col devcol" id="device">
+    <div class="fm1wrap" id="fm1wrap" title="Click to enlarge">
+      <div class="fm1">
+        <svg id="fm1panel" aria-hidden="true"></svg>
+        <canvas id="screen" width="240" height="240"></canvas>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button id="connect" class="primary">Connect</button>
+      <button id="disc" disabled>Disconnect</button>
+      <button id="probe">Find device</button>
+      <button id="snap" disabled style="display:none">Refresh banks</button>
+      <button id="ableton">Ableton export</button>
+    </div>
+    <div id="mstat"></div>
+    <div class="sec arr">
+      <div class="btnrow" style="justify-content:space-between;width:100%"><h2 style="margin:0">Arrangement · export order</h2><button id="arrread">Read arrangement</button></div>
+      <div id="arr" class="arr-grid"><div class="hint">Not read yet. “Read arrangement” shows scenes and tracks.</div></div>
     </div>
   </section>
-
+  <div class="sidecol">
+    <div class="sec">
+      <h2>My sounds</h2>
+      <div class="minelist" id="minelist"></div>
+      <div class="hint" id="mineempty">None yet. “Save as mine” keeps an edited copy; a DX7 file (.syx) can be dropped on the editor.</div>
+      <div class="btnrow">
+        <button id="edimport" title="A DX7 voice or 32-voice bank (.syx), or a Trapstation sound (.json)">Import…</button>
+        <button id="edread" title="Reads the FM6 voices of the six tracks from the last project on the FM-1. Read only.">Read FM-1 tracks</button>
+      </div>
+      <input id="edfile" type="file" accept=".syx,.json" hidden>
+      <div class="hint">Sounds and edits stay on this PC. The editor plays through the sound engine of the firmware itself.</div>
+    </div>
+    <div class="sec">
+      <h2>Banks A–E · factory presets</h2>
+      <div class="tabs" id="abetabs"></div>
+      <div class="slots" id="abeslots"></div>
+    </div>
   <section class="edmain" id="edmain">
     <div class="edbar">
       <input id="edname" type="text" maxlength="24" spellcheck="false">
@@ -334,6 +336,7 @@
     <div id="edstat" class="edstat"></div>
     <div class="edscroll"><div id="params"></div></div>
   </section>
+  </div>
 </div>
 <div id="fm1back" class="fm1back" hidden></div>
 
