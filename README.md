@@ -82,9 +82,10 @@ shows sounds that device does not have.
 - SLICE settings of a sample: kept with the last jam on the device, not shown in the app
 - macOS and Linux
 
-The device functions that are new in this build are the FM-1's keys, reading the FM6 sounds and the export of 1.1
-jams. If something does not work for you, open an [issue](https://github.com/sog-maker/trapstation-desktop/issues)
-with what you did and what the app said.
+Every function of this build has been tested on a FM-1 with TRAPSTATION OS 1.1.0.0, the new ones included: the
+FM-1's keys playing the editor's sound, reading the FM6 sounds, and the export of 1.1 jams. If something does not work
+for you, open an [issue](https://github.com/sog-maker/trapstation-desktop/issues) with what you did and what the app
+said.
 
 ## Download
 
