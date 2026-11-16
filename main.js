@@ -109,7 +109,7 @@ ipcMain.handle("ff:opus", async (_e, input, name) => {
   await ffmpeg(["-y", "-i", input, "-c:a", "libopus", "-b:a", "96k", out], false);
   return out;
 });
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".syx": "application/octet-stream" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".syx": "application/octet-stream", ".wasm": "application/wasm" };
 
 function serve() {
   return new Promise((resolve) => {
@@ -127,6 +127,8 @@ function serve() {
     srv.listen(0, "127.0.0.1", () => resolve(srv));
   });
 }
+
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 app.whenReady().then(async () => {
   // allow WebMIDI with SysEx for this app only

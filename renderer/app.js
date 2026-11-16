@@ -5,20 +5,16 @@ import { Updater } from "../web/fm1ota.js";
 import { Mirror } from "./mirror.js";
 import { snapshot, endSession, readSampleRegion, readObjects, slotBytes, withSlot, writeObject, POOLS, GB_SLOTS, GB_PMAGIC, SOBJ_LEN } from "./banks.js";
 import { parseVital, toFm1 } from "./vital.js";
-import { FACTORY } from "./factory_params.js";
-import { renderEditor } from "./editor.js";
+import { initSoundView, deviceNote, deviceGone, soundOn } from "./soundview.js";
+import { buildFrame } from "./fm1frame.js";
 import { parseJam } from "./jam.js";
 import { clipOf, smf, smfScene, sceneTicks } from "./clips.js";
 import { openClipEditor } from "./clipeditor.js";
 
 let lastJam = null;   // the last read arrangement (jam), for the clip view and the clip export
 
-// local edits survive a restart (this PC only; nothing is written to the FM-1)
-function saveEdits() { try { localStorage.setItem("trap-edits", JSON.stringify(edits)); } catch (_) { /* no storage */ } }
-function loadEdits() { try { const s = localStorage.getItem("trap-edits"); if (s) Object.assign(edits, JSON.parse(s)); } catch (_) { /* no storage */ } }
 import { parseImage, buildImage, SMP_CAP } from "../web/smpimg.js";
 import { PNAMES } from "./params.js";
-import { PLABEL } from "./labels.js";
 
 const $ = (id) => document.getElementById(id);
 const files = [];           // { name, rate, seconds, bytes, img, syx }
@@ -205,7 +201,26 @@ function sendSample(i) { return insertSample(i, null); }
 $("sendBtn").onclick = () => selected !== null && sendSample(selected);
 
 // ---------- device ----------
+const fm1 = buildFrame($("fm1panel"), $("screen"));     // the FM-1 drawn around the mirror
 const screen = new Mirror($("screen"), setMirror);
+// a click enlarges the FM-1 (and its screen), another click puts it back
+function zoomFm1(on) { $("fm1wrap").classList.toggle("big", on); $("fm1back").hidden = !on; $("fm1wrap").title = on ? "Click to put back" : "Click to enlarge"; }
+$("fm1wrap").onclick = () => zoomFm1(!$("fm1wrap").classList.contains("big"));
+$("fm1back").onclick = () => zoomFm1(false);
+
+// the FM-1 sends the notes of its keys over USB MIDI: they play the sound on the editor
+let noteInput = null;
+function onDeviceMidi(ev) {
+  const d = ev.data;
+  if (!d || d.length < 3) return;
+  const kind = d[0] & 0xF0;
+  if (kind === 0x90 && d[2] > 0) deviceNote(d[1], d[2], true);
+  else if (kind === 0x80 || kind === 0x90) deviceNote(d[1], 0, false);
+}
+function listenNotes(on) {
+  if (noteInput) { noteInput.removeEventListener("midimessage", onDeviceMidi); noteInput = null; deviceGone(); }
+  if (on && link && link.input) { noteInput = link.input; noteInput.addEventListener("midimessage", onDeviceMidi); }
+}
 
 async function connect() {
   if (link) return;
@@ -217,8 +232,10 @@ async function connect() {
     if (!found) { setMirror("No FM-1 found. Check the USB cable and close other music apps."); return; }
     link = found.link;
     screen.start(link);
+    listenNotes(true);
+    soundOn();
     $("snap").disabled = false; $("disc").disabled = false;
-    setMirror("Connected to " + found.name + ". Mirror running.");
+    setMirror("Connected to " + found.name + ". Mirror running; the FM-1's keys play the sound on the editor.");
   } catch (e) {
     setMirror("Error: " + e.message);
   }
@@ -226,6 +243,7 @@ async function connect() {
 
 async function disconnect() {
   if (!link) return;
+  listenNotes(false);
   screen.stop();
   link.close();
   link = null;
@@ -253,164 +271,8 @@ async function refreshBanks() {
   }
 }
 
-// banks A..E as the FM-1 shows them: factory presets, read-only; a click shows the preset's parameters
-let abe = "A", abeSlot = null;
-function renderABE() {
-  const tabs = $("abetabs"), box = $("abeslots");
-  tabs.innerHTML = ""; box.innerHTML = "";
-  for (const k of Object.keys(FACTORY)) {
-    const b = document.createElement("button");
-    b.textContent = k;
-    if (k === abe) b.classList.add("on");
-    b.onclick = () => { abe = k; abeSlot = null; renderABE(); renderFactoryParams(); };
-    tabs.appendChild(b);
-  }
-  FACTORY[abe].forEach((s, i) => {
-    const d = document.createElement("div");
-    d.className = "slot" + (abeSlot === i ? " sel" : "");
-    d.innerHTML = `<div class="n">${abe}${i + 1}</div>${s.name}`;
-    d.onclick = () => { abeSlot = i; renderABE(); renderFactoryParams(); };
-    box.appendChild(d);
-  });
-}
-
-// the selected preset's parameters: only the values the recipe sets, with their names
-function renderFactoryParams() {
-  const box = $("params");
-  box.innerHTML = "";
-  if (abeSlot === null) { box.innerHTML = `<div class="note">Choose a preset (${abe}1–${abe}8).</div>`; return; }
-  const s = FACTORY[abe][abeSlot];
-  const key = "factory:" + abe + abeSlot;
-  if (!edits[key]) {                                    // the recipe's values, everything else 0
-    const v = new Array(PNAMES.length).fill(0);
-    for (const [name, val] of Object.entries(s.p)) { const i = PNAMES.indexOf(name); if (i >= 0) v[i] = val; }
-    edits[key] = v;
-  }
-  const values = edits[key];
-  // the editor in the design's look; every change is kept at once (local, saved on this PC)
-  box.className = "editor-host";
-  renderEditor(box, values, s.machine, PNAMES, (name, v) => {
-    edits[key] = values;
-    saveEdits();
-    setMirror(`${abe}${abeSlot + 1} · ${s.name}: ${name} = ${v} (saved locally, not written to the FM-1)`);
-  });
-  return;
-  const head = document.createElement("div");
-  head.className = "note";
-  head.style.gridColumn = "1 / -1";
-  head.textContent = `${abe}${abeSlot + 1}: ${s.name} · Engine ${s.machine} · editable locally, not written to the FM-1`;
-  box.appendChild(head);
-  // The FM1..FM2 slots mean operators in FMSYN, and the filter (and its envelope) in the other engines (params.c aliases).
-  const isFM = s.machine === "FMSYN";
-  const OPS = ["FM1", "FM2", "FM3", "FM4"], OPNAMES = ["ATK", "DEC", "SUS", "REL", "LEVEL"];
-  const FILTER = { FM1_ATK: "CUT", FM1_DEC: "RES", FM1_SUS: "DRV", FM1_REL: "KTR", FM2_ATK: "FE ATK", FM2_DEC: "FE DEC", FM2_SUS: "FE SUS", FM2_LEVEL: "FE AMT", FM2_REL: "FE REL" };
-  const GROUPS = [];
-  if (isFM) {
-    GROUPS.push(["Operatoren", OPS.flatMap((o) => OPNAMES.map((n) => ({ name: o + "_" + n }))).filter((x) => PNAMES.includes(x.name))]);
-  } else {
-    GROUPS.push(["Filter", Object.keys(FILTER).map((n) => ({ name: n, label: FILTER[n] }))]);
-  }
-  GROUPS.push(["Envelope", ["ATK", "DEC", "SUS", "REL", "ESYNC"].map((n) => ({ name: n }))]);
-  GROUPS.push(["Effects", ["DIST", "CHOR", "DLY", "REV", "SPRD", "IA", "IB", "IC", "IMIX", "ITYPE", "FTYPE"].map((n) => ({ name: n }))]);
-  const seen = new Set();
-  for (const [title, items] of GROUPS) {
-    const h = document.createElement("div");
-    h.className = "note";
-    h.style.gridColumn = "1 / -1";
-    h.style.color = "var(--red)";
-    h.textContent = title;
-    box.appendChild(h);
-    for (const it of items) {
-      const i = PNAMES.indexOf(it.name);
-      if (i < 0 || seen.has(i)) continue;
-      seen.add(i);
-      box.appendChild(paramField(it.name, i, values, key, it.label));
-    }
-  }
-  const restEl = document.createElement("div");
-  restEl.className = "note";
-  restEl.style.gridColumn = "1 / -1";
-  restEl.textContent = "Weitere Parameter";
-  box.appendChild(restEl);
-  PNAMES.forEach((name, i) => { if (!seen.has(i)) box.appendChild(paramField(name, i, values, key)); });
-}
-
-// one editable field; the change stays in edits (local)
-function paramField(name, i, values, key, label) {
-  const l = document.createElement("label");
-  l.innerHTML = `<span>${label || PLABEL[name] || name}</span>`;
-  const inp = document.createElement("input");
-  inp.type = "number"; inp.min = -64; inp.max = 127; inp.value = values[i];
-  inp.onchange = () => {
-    const v = Math.max(-64, Math.min(127, Number(inp.value) || 0));
-    values[i] = v;
-    edits[key] = values;
-    setMirror(`Changed locally: ${name} = ${v}`);
-  };
-  l.appendChild(inp);
-  return l;
-}
-
-function renderBanks() {
-  renderABE();
-  renderFactoryParams();
-  return;   // the sound-pool view (Gruppen-Sounds) is hidden: not needed next to the sample loader
-  const tabs = $("pools");
-  tabs.innerHTML = "";
-  POOLS.forEach((name, i) => {
-    const b = document.createElement("button");
-    b.textContent = name;
-    if (i === pool) b.classList.add("on");
-    b.onclick = () => { pool = i; slot = null; renderBanks(); };
-    tabs.appendChild(b);
-  });
-  const box = $("slots");
-  box.innerHTML = "";
-  for (let s = 0; s < GB_SLOTS; s++) {
-    const cell = pools ? pools[pool][s] : null;
-    const d = document.createElement("div");
-    d.className = "slot" + (cell ? " used" : "") + (slot === s ? " sel" : "");
-    d.innerHTML = `<div class="n">${String(s + 1).padStart(2, "0")}</div>${cell ? "gesetzt" : "frei"}`;
-    d.onclick = () => { slot = s; renderBanks(); renderParams(); };
-    d.ondragover = (e) => { e.preventDefault(); d.classList.add("over"); };
-    d.ondragleave = () => d.classList.remove("over");
-    d.ondrop = (e) => {
-      e.preventDefault(); d.classList.remove("over");
-      const f = e.dataTransfer.files[0];
-      if (f && /\.vital$/i.test(f.name)) { slot = s; importVital(f, pool, s); }
-      else setMirror("Vital presets (.vital) go on a sound slot. Samples belong on S01–S32.");
-    };
-    box.appendChild(d);
-  }
-  renderParams();
-}
-
-// parameter view for the selected slot; edits stay local
-function renderParams() {
-  const box = $("params");
-  box.innerHTML = "";
-  const key = pool + ":" + slot;
-  const hasEdit = slot !== null && edits[key];
-  if (slot === null || (!hasEdit && (!pools || !pools[pool][slot]))) {
-    box.innerHTML = `<div class="note">${slot === null ? "Choose a slot." : "Slot is free. Load a Vital preset here."}</div>`;
-    return;
-  }
-  const values = edits[key] || pools[pool][slot].values;
-  PNAMES.forEach((name, j) => {
-    const l = document.createElement("label");
-    l.innerHTML = `<span>${PLABEL[name] || name}</span>`;
-    const inp = document.createElement("input");
-    inp.type = "number"; inp.min = -64; inp.max = 127; inp.value = values[j];
-    inp.onchange = () => {
-      const cur = (edits[key] || pools[pool][slot].values).slice();
-      cur[j] = Math.max(-64, Math.min(127, Number(inp.value) || 0));
-      edits[key] = cur;
-      setMirror("Change only local: " + name + " = " + cur[j] + " (not written to the FM-1).");
-    };
-    l.appendChild(inp);
-    box.appendChild(l);
-  });
-}
+// the factory banks and the sound editor live in the editor view (soundview.js)
+function renderBanks() {}
 
 // ---------- Vital preset -> free sound slot ----------
 // analyses the file, shows the suggestion in the parameter view, then (after confirmation) backs up the object and writes it
@@ -454,7 +316,7 @@ async function importVital(file, pool, slot) {
     setMirror("Error writing: " + e.message + " The FM-1 is disconnected.");
   } finally {
     // the FM-1 restarts after a write: close the link without overwriting the status text
-    if (link) { screen.stop(); link.close(); link = null; }
+    if (link) { listenNotes(false); screen.stop(); link.close(); link = null; }
     $("snap").disabled = true; $("disc").disabled = true;
   }
 }
@@ -645,7 +507,23 @@ $("probe").onclick = async () => {
   } catch (e) { setMirror("Error: " + e.message); }
 };
 
-loadEdits();
+// the editor reads the FM-1's last project through this app's device link (read only)
+initSoundView({
+  lightKey: (note, on) => fm1.key(note, on),
+  clearKeys: () => fm1.clear(),
+  readProject: async () => {
+    if (!link) await connect();
+    if (!link) return null;
+    await screen.pause();
+    try {
+      const objs = await readObjects(link, [9, 17], () => {});
+      return parseJam(objs[9], objs[17]);
+    } finally {
+      screen.resume();
+    }
+  },
+});
+
 setTimeout(() => $("splash").classList.add("gone"), 1400);
 renderFiles();
 renderBanks();

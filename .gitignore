@@ -4,3 +4,4 @@ out/
 Sicherungen/
 Opus-Archiv/
 *.log
+__pycache__/

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -22,8 +22,38 @@
   header b { letter-spacing:.14em; font-size:14px; }
   header span { color:var(--steel); font-size:11px; letter-spacing:.08em; }
 
-  /* three columns: converter + sampler | device (centre) | banks + editor */
-  .main { display:grid; grid-template-columns: 380px minmax(520px,1fr) 440px; min-height:0; }
+  [hidden] { display:none !important; }
+
+  /* one page: banks | editor | device */
+  .app { display:grid; grid-template-columns: 214px minmax(0,1fr) clamp(380px, 31vw, 460px); min-height:0; }
+  .devcol { display:flex; flex-direction:column; align-items:center; gap:8px; background:var(--bg); }
+  .devgrid { width:100%; display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:0 18px; align-items:start; }
+  .devgrid .sec { border-bottom:none; border-top:1px solid var(--raise); padding-top:12px; }
+  .edmain { border-left:1px solid var(--raise); }
+  .devcol > * { flex:none; }
+  .devcol .sec { width:100%; }
+  .devcol .btnrow { margin:0; }
+  .devcol .arr { max-width:none; }
+  .devcol .filelist { max-height:150px; margin-top:6px; }
+  .devcol #drop { padding:10px; }
+
+  /* the FM-1 around the mirrored screen; a click enlarges it */
+  .fm1wrap { width:min(100%, 1100px, calc((100vh - 230px) * 1.6)); min-width:min(100%, 420px); cursor:zoom-in; flex:none; }
+  .fm1 { position:relative; width:100%; aspect-ratio:1000 / 624; user-select:none; }
+  .fm1 svg { position:absolute; inset:0; width:100%; height:100%; }
+  .fm1 canvas { position:absolute; background:#000; image-rendering:auto; border-radius:2px; }
+  .fm1wrap.big { min-width:0; position:fixed; z-index:15; left:50%; top:50%; transform:translate(-50%,-50%); width:min(1100px, 94vw, 150vh); cursor:zoom-out; }
+  .fm1back { position:fixed; inset:0; background:rgba(0,0,0,.82); z-index:14; }
+  .fm1-body { fill:#1d1d1f; stroke:#000; }
+  .fm1-tray { fill:#141415; }
+  .fm1-part { fill:#2a2a2d; stroke:#3a3a3e; stroke-width:1.5; }
+  .fm1-ind { stroke:#d6d6d8; stroke-width:3; stroke-linecap:round; }
+  .fm1-label { fill:#d6d6d8; font-family:ui-monospace, Consolas, monospace; letter-spacing:.04em; }
+  .fm1-face { fill:#0c0c0d; stroke:#3a3a3e; stroke-width:1.5; }
+  .fm1-slit { fill:#3a3a3c; transition:fill .05s; }
+  .fm1-key.lit .fm1-slit { fill:#ececee; filter:drop-shadow(0 0 4px rgba(255,255,255,.7)); }
+  .fm1-key.lit .fm1-face { stroke:var(--red); }
+
   .filelist { max-height:320px; overflow:auto; border:1px solid var(--raise); border-radius:3px; background:var(--bg); }
   .col { background:var(--surf); border:1px solid var(--raise); padding:12px; overflow:auto; min-height:0; min-width:0; }
   .col.center { display:flex; flex-direction:column; align-items:center; gap:10px; background:var(--bg); }
@@ -42,7 +72,6 @@
   /* device screen: the framebuffer is 240 x 240, scaled smoothly, in a bezel like the design cards */
   .bezel { position:relative; padding:14px; border-radius:18px; background:linear-gradient(160deg,#2A2E31 0%,#16181A 45%,#0B0C0D 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 10px 30px rgba(0,0,0,.6), 0 0 0 1px #000; }
   .bezel::after { content:""; position:absolute; inset:14px; border-radius:8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), inset 0 0 28px rgba(0,0,0,.55); pointer-events:none; }
-  #screen { display:block; width:480px; height:480px; image-rendering:auto; border-radius:8px; background:#000; }
 
   /* tabs and cells (banks, samples, pools) */
   .tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px; }
@@ -72,33 +101,111 @@
   .arr-c.on { background:rgba(255,42,42,.45); border-color:var(--red); }
   .arr-c.on.gold { background:rgba(253,207,61,.35); border-color:var(--gold); }
 
-  /* sound editor */
-  #params { width:100%; }
+  /* ---------- sound editor view ---------- */
+  .edside { display:flex; flex-direction:column; }
+  .slots.two { grid-template-columns: 1fr 1fr; }
+  .slot .mach, .mine .mach { font-size:9px; letter-spacing:.1em; color:var(--steel); margin-top:2px; }
+  .slot.fm .mach, .mine .mach { color:var(--red); }
+  .minelist { max-height:220px; overflow:auto; display:flex; flex-direction:column; gap:3px; margin-bottom:6px; }
+  .mine { display:flex; align-items:center; gap:6px; background:var(--raise); border:1px solid var(--line); border-radius:3px; padding:5px 6px; cursor:pointer; font-size:12px; }
+  .mine.sel { outline:2px solid var(--red); }
+  .mine-n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mine .x { background:none; border:none; color:var(--steel); padding:0 3px; }
+  .mine .x:hover { color:var(--red); }
+  .edmain { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto auto minmax(0,1fr); min-height:0; min-width:0; background:var(--bg); }
+  .edbar { display:flex; align-items:center; gap:6px; padding:8px 14px 6px; flex-wrap:wrap; }
+  .edbar button { white-space:nowrap; padding:5px 9px; }
+  .edbar .grow { display:none; }
+  #edname { background:transparent; border:1px solid transparent; color:var(--text); font:700 17px/1.2 "Segoe UI", system-ui, sans-serif; letter-spacing:.05em; padding:2px 6px; width:170px; min-width:120px; flex:1 1 130px; text-transform:uppercase; }
+  #edname:not(:disabled) { border-color:var(--line); background:var(--surf); }
+  #edname:disabled { opacity:1; }
+  .edtag { font-size:9px; letter-spacing:.1em; padding:3px 5px; border:1px solid var(--line); color:var(--steel); border-radius:2px; white-space:nowrap; }
+  .edtag.gold { color:var(--gold); border-color:var(--gold); }
+  .edstat { color:var(--steel); font-size:12px; min-height:18px; padding:0 14px 6px; }
+  .edscroll { overflow:auto; min-height:0; padding:0 14px 12px; }
   .editor { display:flex; flex-direction:column; gap:10px; }
-  .editor .panel { background:var(--surf); border:1px solid var(--raise); border-radius:3px; padding:10px; }
-  .sec-head { display:flex; gap:8px; align-items:center; color:var(--red); letter-spacing:.14em; font-size:12px; text-transform:uppercase; border-bottom:1px solid var(--raise); padding-bottom:6px; margin-bottom:8px; }
-  .sec-icon { color:var(--red); }
-  .op { border:1px solid var(--raise); border-radius:3px; margin-bottom:8px; padding:8px; background:var(--bg); }
-  .op-head { display:flex; gap:8px; align-items:center; color:var(--text); font-size:12px; }
-  .op-num { color:var(--red); font-weight:700; }
-  .badge { font-size:10px; padding:2px 6px; border:1px solid; border-radius:2px; letter-spacing:.1em; }
-  .badge.carrier { color:var(--red); border-color:var(--red); }
-  .badge.modulator { color:var(--gold); border-color:var(--gold); }
-  .op-body { display:grid; grid-template-columns: 1fr; gap:8px; margin-top:8px; }
-  .env { width:100%; height:64px; background:var(--bg); border:1px solid var(--raise); border-radius:2px; }
-  .env-fill { fill: rgba(255,42,42,.18); }
-  .env-line { fill:none; stroke:var(--red); stroke-width:2; }
-  .op-grid, .fx-grid, .rest-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px; min-width:0; }
-  .ctl { background:var(--surf); border:1px solid var(--raise); padding:5px 6px; border-radius:3px; min-width:0; }
-  .ctl-label { font-size:10px; letter-spacing:.12em; color:var(--steel); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .ctl-row { display:flex; gap:6px; align-items:center; min-width:0; }
+
+  /* operator rail (the OP1-OP6 row of the device) */
+  .rail { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:6px; }
+  .rail-op { display:grid; grid-template-columns:auto 1fr; gap:2px 4px; align-items:center; text-align:left; padding:6px 7px; min-width:0; overflow:hidden; background:var(--surf); border:1px solid var(--raise); }
+  .rail-op.sel { background:var(--red-deep); border-color:var(--red); }
+  .rail-n { font-weight:700; letter-spacing:.08em; }
+  .rail-kind { font-size:9px; letter-spacing:.12em; color:var(--steel); justify-self:end; }
+  .rail-kind.car { color:var(--gold); }
+  .rail-f { grid-column:1 / -1; font-size:11px; color:var(--steel); font-variant-numeric:tabular-nums; }
+  .rail-op.sel .rail-f, .rail-op.sel .rail-kind { color:var(--text); }
+  .rail-m { grid-column:1 / -1; height:4px; background:var(--bg); border-radius:2px; overflow:hidden; }
+  .rail-m i { display:block; height:100%; background:var(--red); }
+  .rail-op.sel .rail-m i { background:var(--text); }
+
+  /* displays */
+  .disp { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; }
+  .disp-box:first-child { grid-column: 1 / -1; }
+  .disp-box, .pg { background:var(--surf); border:1px solid var(--raise); border-radius:3px; min-width:0; }
+  .disp-title { font-size:10px; letter-spacing:.14em; color:var(--steel); padding:6px 9px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .disp-graph, .pg-graph { padding:4px 6px 6px; }
+  .graph { display:block; width:100%; height:auto; max-height:136px; background:var(--bg); border:1px solid var(--raise); border-radius:2px; }
+  .graph.small { max-height:110px; }
+  .graph .grid { stroke:var(--raise); stroke-width:1; }
+  .graph .grid.mid { stroke:var(--line); stroke-dasharray:3 3; }
+  .graph .grid.rel { stroke:var(--line); stroke-dasharray:2 3; }
+  .graph .gtext { fill:var(--steel); font-size:8px; letter-spacing:.08em; }
+  .graph .gtext.mid { text-anchor:middle; font-size:10px; }
+  .graph .gtext.sel { fill:var(--red); font-weight:700; }
+  .env-fill { fill: rgba(255,42,42,.16); }
+  .env-line { fill:none; stroke:var(--red); stroke-width:2; stroke-linejoin:round; }
+  .env-dot { fill:var(--text); }
+  .bar-bg { fill:var(--raise); }
+  .bar { fill:var(--steel); }
+  .bar.car { fill:#B9BEC3; }
+  .bar.sel { fill:var(--red); }
+  .hit { fill:transparent; cursor:pointer; }
+  .wire { stroke:var(--red); stroke-width:1.5; fill:none; }
+  .wire.out { stroke:var(--steel); }
+  .wire.fb { stroke:var(--gold); }
+  .graph .out { stroke:var(--steel); stroke-width:1.5; }
+  .node { cursor:pointer; }
+  .node rect { fill:var(--raise); stroke:var(--line); }
+  .node.car rect { stroke:var(--gold); }
+  .node.sel rect { fill:var(--red); stroke:var(--red); }
+  .node text { fill:var(--text); font-size:10px; font-weight:700; text-anchor:middle; }
+
+  /* page groups (SHAPE / ENV / LFO / FX, as on the device) and their pages */
+  .grp-tabs { display:flex; gap:4px; }
+  .grp-tabs button { flex:1; min-width:0; letter-spacing:.14em; font-size:11px; }
+  .grp-tabs button.on { background:var(--red); border-color:var(--red); }
+  .pages { display:grid; grid-template-columns: minmax(0,1fr); gap:8px; align-items:start; }
+  .pg.full { grid-column: 1 / -1; }
+  .pg.full .pg-body { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .pg-head { display:flex; justify-content:space-between; align-items:center; padding:7px 9px; border-bottom:1px solid var(--raise); }
+  .pg-title { color:var(--text); font-size:12px; font-weight:700; letter-spacing:.14em; }
+  .pg-tag { font-size:9px; letter-spacing:.12em; color:var(--red); border:1px solid var(--red-deep); padding:1px 5px; border-radius:2px; }
+  .pg-body { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:6px; padding:8px; }
+  .pg.wide .pg-body { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .pg.wide { grid-column: 1 / -1; }
+  .ctl { background:var(--bg); border:1px solid var(--raise); padding:5px 7px; border-radius:3px; min-width:0; }
+  .ctl-head { display:flex; justify-content:space-between; gap:6px; margin-bottom:2px; }
+  .ctl-label { font-size:10px; letter-spacing:.12em; color:var(--steel); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ctl-note { font-size:10px; color:var(--gold); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .ctl-row { display:flex; gap:8px; align-items:center; min-width:0; }
   .ctl-row input[type=range] { flex:1; min-width:0; accent-color:var(--red); }
-  .ctl-row input[type=number] { width:52px; flex:none; background:var(--bg); color:var(--text); border:1px solid var(--line); text-align:right; padding:2px; }
-  .ctl.off { opacity:.35; }
-  .fx-card { background:var(--surf); border:1px solid var(--raise); border-radius:3px; padding:8px; display:flex; flex-direction:column; gap:6px; min-width:0; }
-  .fx-title { color:var(--text); font-size:11px; letter-spacing:.14em; border:1px solid var(--line); padding:3px 6px; display:inline-block; }
-  .fx-note { font-size:11px; color:var(--steel); }
-  .rest-grid .ctl-label { font-size:9px; }
+  .ctl-row input[type=number], .ctl-row select { width:52px; flex:none; background:var(--surf); color:var(--text); border:1px solid var(--line); text-align:right; padding:2px 3px; font:inherit; }
+  .ctl-row select { width:86px; text-align:left; }
+  .ed-hint { grid-column:1 / -1; color:var(--steel); font-size:11px; }
+  .more summary { cursor:pointer; color:var(--steel); letter-spacing:.12em; font-size:11px; text-transform:uppercase; padding:6px 0; }
+
+  /* sound strip: on / volume / hold (the notes come from the FM-1's keys or the computer keys) */
+  .playbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:2px 14px 8px; font-size:12px; color:var(--steel); border-bottom:1px solid var(--raise); }
+  .playbar label { display:flex; align-items:center; gap:6px; }
+  .playbar input[type=range] { width:90px; accent-color:var(--red); }
+  .playbar select { background:var(--bg); color:var(--text); border:1px solid var(--line); padding:3px; font:inherit; }
+  .playbar button { padding:4px 10px; }
+  .playbar button.on { background:var(--red); border-color:var(--red); }
+  #kbaudio.on { background:var(--raise); border-color:var(--green); color:var(--green); }
+  .meter { width:90px; height:8px; background:var(--bg); border:1px solid var(--line); border-radius:2px; overflow:hidden; }
+  .meter i { display:block; height:100%; width:0; background:var(--green); }
+  .meter i.clip { background:var(--red); }
+  .edstat { padding-top:6px; }
 
   /* bottom: file list */
   .bottom { border-top:2px solid var(--raise); display:grid; grid-template-rows:auto 1fr; min-height:0; background:var(--surf); }
@@ -137,12 +244,50 @@
   <b>TRAPSTATION</b><span>SAMPLING WORKSTATION · DESKTOP</span>
 </header>
 
-<div class="main">
-  <!-- left: converter, its file list right below, then the sampler -->
-  <section class="col">
+<!-- one page: banks and own sounds | the FM-1 with arrangement, converter and sampler | the sound editor -->
+<div class="app">
+  <aside class="col edside">
+    <div class="sec">
+      <h2>Banks A–E · factory presets</h2>
+      <div class="tabs" id="abetabs"></div>
+      <div class="slots two" id="abeslots"></div>
+    </div>
+    <div class="sec">
+      <h2>My sounds</h2>
+      <div class="minelist" id="minelist"></div>
+      <div class="hint" id="mineempty">None yet. “Save as mine” keeps an edited copy; a DX7 file (.syx) can be dropped on the editor.</div>
+      <div class="btnrow">
+        <button id="edimport" title="A DX7 voice or 32-voice bank (.syx), or a Trapstation sound (.json)">Import…</button>
+        <button id="edread" title="Reads the FM6 voices of the six tracks from the last project on the FM-1. Read only.">Read FM-1 tracks</button>
+      </div>
+      <input id="edfile" type="file" accept=".syx,.json" hidden>
+    </div>
+    <div class="hint">Sounds and edits stay on this PC. The editor plays through the sound engine of the firmware itself.</div>
+  </aside>
+
+  <section class="col devcol" id="device">
+    <div class="fm1wrap" id="fm1wrap" title="Click to enlarge">
+      <div class="fm1">
+        <svg id="fm1panel" aria-hidden="true"></svg>
+        <canvas id="screen" width="240" height="240"></canvas>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button id="connect" class="primary">Connect</button>
+      <button id="disc" disabled>Disconnect</button>
+      <button id="probe">Find device</button>
+      <button id="snap" disabled style="display:none">Refresh banks</button>
+      <button id="ableton">Ableton export</button>
+    </div>
+    <div id="mstat"></div>
+    <div class="devgrid">
+    <div class="sec arr">
+      <div class="btnrow" style="justify-content:space-between;width:100%"><h2 style="margin:0">Arrangement · export order</h2><button id="arrread">Read arrangement</button></div>
+      <div id="arr" class="arr-grid"><div class="hint">Not read yet. “Read arrangement” shows scenes and tracks.</div></div>
+    </div>
     <div class="sec">
       <h2>Converter</h2>
-      <div id="drop">Drop an audio file here<br>(WAV, MP3, FLAC, …) or click</div>
+      <div id="drop">Drop an audio file here (WAV, MP3, FLAC, …) or click</div>
       <input id="file" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.opus,.m4a,.aiff" hidden>
       <p id="conv" class="hint"></p>
       <div class="btnrow">
@@ -150,54 +295,47 @@
         <button id="sendBtn" class="primary" disabled>Send selected file</button>
       </div>
       <div id="status"></div>
-    </div>
-    <div class="sec">
-      <h2>Files · drag onto a sampler slot</h2>
       <div class="filelist">
         <table><thead><tr><th>Name</th><th>Rate</th><th>Length</th><th>Bytes</th></tr></thead><tbody id="list"></tbody></table>
-        <div class="empty" id="empty">No file converted yet.</div>
+        <div class="empty" id="empty">No file converted yet. Drag a converted file onto a sampler slot.</div>
       </div>
     </div>
     <div class="sec">
       <h2>Sampler · S01–S32</h2>
       <div class="btnrow"><button id="samp">Read samples</button></div>
-      <p class="hint">Drag a file from the list onto a slot to insert it there.</p>
       <div id="membar" class="membar"><div class="fill" id="memfill"></div><span id="memtxt">Memory: not read</span></div>
       <div class="slots" id="sslots"></div>
     </div>
-  </section>
-
-  <!-- centre: the device -->
-  <section class="col center" id="device">
-    <div class="btnrow">
-      <button id="probe">Find device</button>
-      <button id="connect" class="primary">Connect</button>
-      <button id="snap" disabled style="display:none">Refresh banks</button>
-      <button id="disc" disabled>Disconnect</button>
-      <button id="ableton">Ableton export</button>
-    </div>
-    <div class="bezel"><canvas id="screen" width="240" height="240"></canvas></div>
-    <div id="mstat"></div>
-    <div class="arr">
-      <div class="btnrow" style="justify-content:space-between;width:100%"><h2 style="margin:0">Arrangement · export order</h2><button id="arrread">Read arrangement</button></div>
-      <div id="arr" class="arr-grid"><div class="hint">Not read yet. “Read arrangement” shows scenes and tracks.</div></div>
     </div>
   </section>
 
-  <!-- right: bank management and the preset / sound editor -->
-  <section class="col">
-    <div class="sec">
-      <h2>Banks A–E · factory presets</h2>
-      <div class="tabs" id="abetabs"></div>
-      <div class="slots eight" id="abeslots"></div>
-      <div class="note">Click a preset to show its parameters.</div>
+  <section class="edmain" id="edmain">
+    <div class="edbar">
+      <input id="edname" type="text" maxlength="24" spellcheck="false">
+      <span id="edmach" class="edtag"></span>
+      <span id="edwhere" class="edtag"></span>
+      <span class="grow"></span>
+      <button id="edreset" title="Back to the factory sound">Factory</button>
+      <button id="edsave" class="primary" title="Keeps this sound as a copy of your own">Save as mine</button>
+      <button id="edsyx" title="This voice as a DX7 SysEx file">DX7</button>
+      <button id="edjson" title="This sound with all its values, as a file">Export</button>
     </div>
-    <div class="sec">
-      <h2>Preset and sound editor</h2>
-      <div id="params"></div>
+    <div class="playbar">
+      <button id="kbaudio" class="primary">Turn sound on</button>
+      <label>Volume <input id="kbvol" type="range" min="0" max="150" value="80"></label>
+      <div class="meter"><i id="kbmeter"></i></div>
+      <button id="kbhold" title="Notes keep sounding while you turn the controls">Hold</button>
+      <button id="kbstop" title="Ends all notes">Stop</button>
+      <label title="For the computer keys A W S E D F T G Y H U J K">Keys <select id="kboct">
+        <option value="24">C1</option><option value="36">C2</option><option value="48" selected>C3</option><option value="60">C4</option><option value="72">C5</option>
+      </select></label>
+      <span id="kbstate" class="hint">Play the keys of the connected FM-1, or the computer keys A W S E D F …</span>
     </div>
+    <div id="edstat" class="edstat"></div>
+    <div class="edscroll"><div id="params"></div></div>
   </section>
 </div>
+<div id="fm1back" class="fm1back" hidden></div>
 
 
 <div id="clipdlg" class="modal" hidden>

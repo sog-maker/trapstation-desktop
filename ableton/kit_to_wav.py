@@ -2,10 +2,13 @@
 """Trapstation backup (TRAPSTATION-Sicherung-*.json) -> one WAV per track per kit.
 
 Kit sounds come from the GBK3 kit objects (engine = used, params stored as value - 64). The pattern and
-the globals come from the last jam (JAM1 stream, objects 9 + 17). Each track is rendered by the firmware's
+the globals come from the last jam (JAM1 or JAM6 stream, objects 9 + 17). Each track is rendered by the firmware's
 own sequencer (tools/render_scenes.c, emulator core): steps, swing, gate, ties, ratchets, rolls,
 probability and conditions all run as on the device. The 4 scenes play once each, in order; the scene
 masks decide which track sounds in a scene.
+
+A project of the FM6 firmware (JAM6) is rendered by render_scenes_fm6.exe. Its FMSYN tracks are FM6 voices,
+which live in the project and not in a kit: such a track plays the project's own voice in every kit.
 
 Usage (WSL):  python3 kit_to_wav.py BACKUP.json OUTDIR
 """
@@ -25,11 +28,14 @@ P_APROB, P_MUTE, P_SQNT = 22, 40, 94
 # the marker in P_MUTE, and the pattern's own settings)
 NOT_SOUND = (P_SLEN, P_SDIV, P_SSWING, P_SGATE, P_APROB, P_MUTE, P_SQNT)
 KIT_BYTES = 1272                              # one kit of a GBK3 object (3 kits per object)
-ENGINE_NAME = {1: "DIGITAL", 2: "ANALOG", 3: "SAMPLER", 4: "MONO"}
-if getattr(sys, "frozen", False):                      # the .exe: the renderer is bundled next to it
-    RENDER = os.path.join(sys._MEIPASS, "render_scenes.exe")
-else:
-    RENDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_scenes.exe")
+ENGINE_NAME = {1: "DIGITAL", 2: "ANALOG", 3: "SAMPLER", 4: "MONO", 5: "FM6"}
+ENGI_FM6 = 5                                  # core.h
+FM6_LEN = 158                                 # eng_trap_fm6.c tf6_edit: 155 voice bytes + DRIVE, CUTOFF, OUTPUT
+JAM1, JAM6 = 0x314D414A, 0x364D414A
+# the renderers are bundled next to this file (or inside the .exe): one per firmware engine set
+HERE = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+RENDER = os.path.join(HERE, "render_scenes.exe")            # firmware 1.0.0.0 (JAM1)
+RENDER_FM6 = os.path.join(HERE, "render_scenes_fm6.exe")    # FM6 firmware (JAM6)
 STEP_BYTES = 12                               # sizeof(step_t)
 
 
@@ -42,10 +48,12 @@ def u16(b, i):
 
 
 def parse_jam(obj9, obj17):
-    """JAM1 stream: globals, the six tracks (engine, params, steps), the scene masks."""
-    jam = obj9[4:] + obj17[4:]
-    if struct.unpack_from("<I", jam, 0)[0] != 0x314D414A:
-        raise ValueError("no JAM1 stream")
+    """JAM1 / JAM6 stream: globals, the six tracks (engine, params, steps), the scene masks, the FM6 voices."""
+    # the second object continues the first only when both carry the same generation number (gb_store.c)
+    jam = obj9[4:] + (obj17[4:] if obj17[:4] == obj9[:4] else b"")
+    magic = struct.unpack_from("<I", jam, 0)[0]
+    if magic not in (JAM1, JAM6):
+        raise ValueError("no JAM1 or JAM6 stream")
     i = 4
     ng = jam[i + 3]
     i += 4
@@ -79,7 +87,17 @@ def parse_jam(obj9, obj17):
         i += 2 + u16(jam, i)
     sz = u16(jam, i)
     ph = [i16(jam, i + 2 + 2 * k) for k in range(sz // 2)]
-    return {"G": G, "tracks": tracks, "masks": ph[2:6]}
+    # JAM6: sized blocks follow; the one of 6 x 158 values holds the FM6 voices of the six tracks
+    fm6 = None
+    if magic == JAM6:
+        k = i + 2 + sz
+        while k + 2 <= len(jam):
+            n = u16(jam, k)
+            if n == 6 * FM6_LEN * 2 and k + 2 + n <= len(jam):
+                fm6 = [[i16(jam, k + 2 + 2 * (t * FM6_LEN + j)) for j in range(FM6_LEN)] for t in range(6)]
+                break
+            k += 2 + n
+    return {"G": G, "tracks": tracks, "masks": ph[2:6], "fm6_format": magic == JAM6, "fm6": fm6}
 
 
 def parse_kits(obj13, obj14):
@@ -112,11 +130,18 @@ def write_spec(path, jam, kit, audible, scene_ms, total_ms, samples_path):
     for i, v in enumerate(jam["G"]):
         lines.append(f"g {i} {v}")
     for t in range(6):
-        used = kit[t]["used"]
-        lines.append(f"track {t + 1} {ENGINE_NAME.get(used, 'DIGITAL')}")
-        params = list(kit[t]["params"])
-        for i in NOT_SOUND:
-            params[i] = jam["tracks"][t]["params"][i]
+        if track_is_fm6(jam, t):
+            # an FM6 voice is not in a kit: the project's own track, parameters and voice
+            lines.append(f"track {t + 1} FM6")
+            params = list(jam["tracks"][t]["params"])[:PCOUNT]
+            for i, v in enumerate(jam["fm6"][t]):
+                lines.append(f"f {t + 1} {i} {v}")
+        else:
+            used = kit[t]["used"]
+            lines.append(f"track {t + 1} {ENGINE_NAME.get(used, 'DIGITAL')}")
+            params = list(kit[t]["params"])
+            for i in NOT_SOUND:
+                params[i] = jam["tracks"][t]["params"][i]
         for i, v in enumerate(params):
             lines.append(f"p {t + 1} {i} {v}")
         for at, raw in sorted(jam["tracks"][t]["steps"].items()):
@@ -127,6 +152,10 @@ def write_spec(path, jam, kit, audible, scene_ms, total_ms, samples_path):
     lines.append(f"total_ms {total_ms:.3f}")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
+
+
+def track_is_fm6(jam, t):
+    return bool(jam.get("fm6")) and jam["tracks"][t]["eng"] == ENGI_FM6
 
 
 def scene_length_ms(jam, beat_ms):
@@ -154,6 +183,9 @@ def main():
     d = json.load(open(src, encoding="utf-8"))
     obj = {int(k): base64.b64decode(v) for k, v in d["objects"].items()}
     jam = parse_jam(obj[9], obj[17])
+    render = RENDER_FM6 if jam["fm6_format"] else RENDER
+    if not os.path.exists(render):
+        raise FileNotFoundError(f"the renderer is missing: {render}")
     kits = parse_kits(obj[13], obj[14])
     beat_ms = 60000.0 / jam["G"][0]           # G_BPM
     scene_ms = scene_length_ms(jam, beat_ms)
@@ -172,8 +204,9 @@ def main():
             write_spec(spec, jam, kit, t + 1, scene_ms, total_ms, samples_path)
             name = f"Kit{ki}_Track{t + 1}.wav"
             out = os.path.join(out_dir, name)
-            subprocess.run([RENDER, spec, out], check=True)
-            print(f"{name}: {total_ms / 1000:.2f} s, engine {ENGINE_NAME.get(kit[t]['used'], '-')}")
+            subprocess.run([render, spec, out], check=True)
+            engine = "FM6 (project voice)" if track_is_fm6(jam, t) else ENGINE_NAME.get(kit[t]["used"], "-")
+            print(f"{name}: {total_ms / 1000:.2f} s, engine {engine}")
 
 
 if __name__ == "__main__":
@@ -182,5 +215,7 @@ if __name__ == "__main__":
         print("Done.")
     except Exception as e:                    # keep the window open on errors
         print("Error:", e)
+        if len(sys.argv) >= 3:                # called by the app: report the failure
+            sys.exit(1)
     if len(sys.argv) < 3:
         input("Press Enter to close ...")
